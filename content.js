@@ -1,15 +1,26 @@
 (() => {
   "use strict";
 
+  const STORAGE_KEY = "afSettings";
+  const DEFAULT_SETTINGS = {
+    enabledGlobal: true,
+    enableTextReplacement: true,
+    enableImageReplacement: true,
+    enablePopupSuppression: true,
+    enableIframeReplacement: true,
+    textThresholdLength: 20
+  };
+
   const CONFIG = {
-    ENABLE_TEXT_REVIEW: true,
-    MIN_TEXT_LENGTH: 20,
+    ENABLE_TEXT_REVIEW: DEFAULT_SETTINGS.enableTextReplacement,
+    MIN_TEXT_LENGTH: DEFAULT_SETTINGS.textThresholdLength,
     MASK_CHAR: "#",
     REVIEW_DEBOUNCE_MS: 120,
-    ENABLE_IMAGE_BLANKING: true,
-    ENABLE_POPUP_DOM_BLOCK: true,
-    ENABLE_POPUP_CSS_BLOCK: true,
-    ENABLE_WINDOW_OPEN_BLOCK: true
+    ENABLE_IMAGE_BLANKING: DEFAULT_SETTINGS.enableImageReplacement,
+    ENABLE_IFRAME_BLANKING: DEFAULT_SETTINGS.enableIframeReplacement,
+    ENABLE_POPUP_DOM_BLOCK: DEFAULT_SETTINGS.enablePopupSuppression,
+    ENABLE_POPUP_CSS_BLOCK: DEFAULT_SETTINGS.enablePopupSuppression,
+    ENABLE_WINDOW_OPEN_BLOCK: DEFAULT_SETTINGS.enablePopupSuppression
   };
 
   const POPUP_KEYWORD_RE =
@@ -29,6 +40,44 @@
   const pendingNodes = new Set();
   const nodeStates = new WeakMap();
   const requestToNode = new Map();
+
+  function normalizeSettings(raw) {
+    const merged = { ...DEFAULT_SETTINGS, ...(raw || {}) };
+    const threshold = Number.parseInt(merged.textThresholdLength, 10);
+    return {
+      enabledGlobal: merged.enabledGlobal !== false,
+      enableTextReplacement: merged.enableTextReplacement !== false,
+      enableImageReplacement: merged.enableImageReplacement !== false,
+      enablePopupSuppression: merged.enablePopupSuppression !== false,
+      enableIframeReplacement: merged.enableIframeReplacement !== false,
+      textThresholdLength: Number.isFinite(threshold) && threshold > 0 ? threshold : DEFAULT_SETTINGS.textThresholdLength
+    };
+  }
+
+  function applySettings(raw) {
+    const settings = normalizeSettings(raw);
+    const enabledGlobal = settings.enabledGlobal !== false;
+
+    CONFIG.ENABLE_TEXT_REVIEW = enabledGlobal && settings.enableTextReplacement;
+    CONFIG.ENABLE_IMAGE_BLANKING = enabledGlobal && settings.enableImageReplacement;
+    CONFIG.ENABLE_IFRAME_BLANKING = enabledGlobal && settings.enableIframeReplacement;
+    CONFIG.ENABLE_POPUP_DOM_BLOCK = enabledGlobal && settings.enablePopupSuppression;
+    CONFIG.ENABLE_POPUP_CSS_BLOCK = enabledGlobal && settings.enablePopupSuppression;
+    CONFIG.ENABLE_WINDOW_OPEN_BLOCK = enabledGlobal && settings.enablePopupSuppression;
+    CONFIG.MIN_TEXT_LENGTH = settings.textThresholdLength;
+  }
+
+  function loadSettings() {
+    return new Promise((resolve) => {
+      chrome.storage.local.get([STORAGE_KEY], (result) => {
+        if (chrome.runtime.lastError) {
+          resolve(DEFAULT_SETTINGS);
+          return;
+        }
+        resolve(normalizeSettings(result?.[STORAGE_KEY]));
+      });
+    });
+  }
 
   function shouldSkipTextNode(node) {
     const parentTag = node?.parentElement?.tagName;
@@ -101,6 +150,13 @@
   }
 
   chrome.runtime.onMessage.addListener((message) => {
+    if (message?.type === "AD_FILTER_SETTINGS_UPDATED") {
+      applySettings(message.settings);
+      if (document.body) {
+        processNode(document.body);
+      }
+      return;
+    }
     if (message?.type !== "AD_FILTER_CHECK_RESULT") return;
 
     const requestId = message.requestId;
@@ -216,6 +272,55 @@
     const images = root.querySelectorAll ? root.querySelectorAll("img") : [];
     for (const img of images) {
       blankImage(img);
+    }
+  }
+
+  function replaceIframeWithBlankImage(iframe) {
+    if (!CONFIG.ENABLE_IFRAME_BLANKING) return;
+    if (!(iframe instanceof HTMLIFrameElement)) return;
+    if (!iframe.isConnected) return;
+    if (iframe.dataset.afBlanked === "1") return;
+
+    const width =
+      iframe.clientWidth ||
+      Number.parseInt(iframe.getAttribute("width") || "0", 10) ||
+      1;
+    const height =
+      iframe.clientHeight ||
+      Number.parseInt(iframe.getAttribute("height") || "0", 10) ||
+      1;
+
+    const img = document.createElement("img");
+    img.dataset.afBlankedIframe = "1";
+    img.alt = "";
+    img.src = createBlankSvgDataUrl(width, height);
+    img.width = Math.max(1, Math.floor(width));
+    img.height = Math.max(1, Math.floor(height));
+    img.style.maxWidth = "100%";
+    img.style.objectFit = "cover";
+
+    const computedStyle = window.getComputedStyle(iframe);
+    if (computedStyle.display === "block" || computedStyle.display === "inline-block") {
+      img.style.display = computedStyle.display;
+    } else {
+      img.style.display = "block";
+    }
+
+    iframe.dataset.afBlanked = "1";
+    iframe.replaceWith(img);
+  }
+
+  function blankIframes(root) {
+    if (!CONFIG.ENABLE_IFRAME_BLANKING) return;
+    if (!root) return;
+    if (root instanceof HTMLIFrameElement) {
+      replaceIframeWithBlankImage(root);
+      return;
+    }
+
+    const iframes = root.querySelectorAll ? root.querySelectorAll("iframe") : [];
+    for (const iframe of iframes) {
+      replaceIframeWithBlankImage(iframe);
     }
   }
 
@@ -357,61 +462,72 @@
   function processNode(root) {
     queueTextNodesInRoot(root);
     blankImages(root);
+    blankIframes(root);
     suppressPopupsInRoot(root);
     scheduleReviewFlush();
   }
 
-  addPopupBlockCss();
-  installWindowOpenBlocker();
+  async function init() {
+    const settings = await loadSettings();
+    applySettings(settings);
 
-  if (document.body) {
-    processNode(document.body);
-  }
+    addPopupBlockCss();
+    installWindowOpenBlocker();
 
-  const observedAttributes = ["src", "srcset", "sizes"];
-  if (CONFIG.ENABLE_POPUP_DOM_BLOCK) {
-    observedAttributes.push("class", "style", "hidden", "open", "id", "role", "aria-modal");
-  }
-
-  const observer = new MutationObserver((mutations) => {
-    for (const mutation of mutations) {
-      if (mutation.type === "characterData") {
-        queueTextNode(mutation.target);
-        continue;
-      }
-
-      if (mutation.type === "attributes") {
-        if (mutation.target instanceof HTMLImageElement) {
-          blankImage(mutation.target);
-        }
-        if (mutation.target instanceof HTMLElement) {
-          suppressPopupElement(mutation.target);
-        }
-        continue;
-      }
-
-      if (mutation.target instanceof Element) {
-        queueTextNodesInRoot(mutation.target);
-        suppressPopupsInRoot(mutation.target);
-      }
-
-      for (const node of mutation.addedNodes) {
-        if (node.nodeType === Node.TEXT_NODE) {
-          queueTextNode(node);
-        } else if (node.nodeType === Node.ELEMENT_NODE) {
-          processNode(node);
-        }
-      }
+    if (document.body) {
+      processNode(document.body);
     }
 
-    scheduleReviewFlush();
-  });
+    const observedAttributes = ["src", "srcset", "sizes"];
+    if (CONFIG.ENABLE_POPUP_DOM_BLOCK) {
+      observedAttributes.push("class", "style", "hidden", "open", "id", "role", "aria-modal");
+    }
 
-  observer.observe(document.documentElement, {
-    subtree: true,
-    childList: true,
-    characterData: true,
-    attributes: true,
-    attributeFilter: observedAttributes
-  });
+    const observer = new MutationObserver((mutations) => {
+      for (const mutation of mutations) {
+        if (mutation.type === "characterData") {
+          queueTextNode(mutation.target);
+          continue;
+        }
+
+        if (mutation.type === "attributes") {
+          if (mutation.target instanceof HTMLImageElement) {
+            blankImage(mutation.target);
+          }
+          if (mutation.target instanceof HTMLIFrameElement) {
+            replaceIframeWithBlankImage(mutation.target);
+          }
+          if (mutation.target instanceof HTMLElement) {
+            suppressPopupElement(mutation.target);
+          }
+          continue;
+        }
+
+        if (mutation.target instanceof Element) {
+          queueTextNodesInRoot(mutation.target);
+          suppressPopupsInRoot(mutation.target);
+        }
+
+        for (const node of mutation.addedNodes) {
+          if (node.nodeType === Node.TEXT_NODE) {
+            queueTextNode(node);
+          } else if (node.nodeType === Node.ELEMENT_NODE) {
+            processNode(node);
+          }
+        }
+      }
+
+      scheduleReviewFlush();
+    });
+
+    observer.observe(document.documentElement, {
+      subtree: true,
+      childList: true,
+      characterData: true,
+      attributes: true,
+      attributeFilter: observedAttributes
+    });
+  }
+
+  init();
 })();

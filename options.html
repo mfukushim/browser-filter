@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Ad Filter 設定</title>
+    <link rel="stylesheet" href="options.css" />
+  </head>
+  <body>
+    <main class="container">
+      <h1>Ad Filter 設定</h1>
+      <form id="settings-form">
+        <label class="row checkbox-row">
+          <input id="enabledGlobal" type="checkbox" />
+          <span>機能全体を有効化</span>
+        </label>
+
+        <label class="row checkbox-row">
+          <input id="enableTextReplacement" type="checkbox" />
+          <span>テキスト置き換えを有効化</span>
+        </label>
+
+        <label class="row checkbox-row">
+          <input id="enableImageReplacement" type="checkbox" />
+          <span>画像置き換えを有効化</span>
+        </label>
+
+        <label class="row checkbox-row">
+          <input id="enablePopupSuppression" type="checkbox" />
+          <span>ポップアップ抑制を有効化</span>
+        </label>
+
+        <label class="row checkbox-row">
+          <input id="enableIframeReplacement" type="checkbox" />
+          <span>iframe を空白画像に置き換える</span>
+        </label>
+
+        <label class="row">
+          <span>テキスト置き換え閾値長さ</span>
+          <input id="textThresholdLength" type="number" min="1" step="1" />
+        </label>
+
+        <label class="row">
+          <span>API エンドポイント</span>
+          <input id="apiEndpoint" type="url" />
+        </label>
+
+        <div class="actions">
+          <button type="submit">保存</button>
+          <p id="status" aria-live="polite"></p>
+        </div>
+      </form>
+    </main>
+    <script src="options.js"></script>
+  </body>
+</html>

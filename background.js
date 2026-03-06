@@ -1,6 +1,19 @@
 (() => {
   "use strict";
 
+  const STORAGE_KEY = "afSettings";
+  const DEFAULT_SETTINGS = {
+    enabledGlobal: true,
+    enableTextReplacement: true,
+    enableImageReplacement: true,
+    enablePopupSuppression: true,
+    enableIframeReplacement: true,
+    textThresholdLength: 20,
+    apiEndpoint: "http://localhost/ad-filter/judge"
+  };
+
+  let currentSettings = { ...DEFAULT_SETTINGS };
+
   const REQUEST_BLOCK_CONFIG = {
     ENABLE_REQUEST_BLOCK: true
   };
@@ -32,10 +45,51 @@
     }
   }));
 
-  const API_ENDPOINT = "http://localhost/ad-filter/judge";
-  // const API_ENDPOINT = "https://example.com/ad-filter/judge";
   const REQUEST_TIMEOUT_MS = 8000;
   const decisionCache = new Map();
+
+  function normalizeSettings(raw) {
+    const merged = { ...DEFAULT_SETTINGS, ...(raw || {}) };
+    const threshold = Number.parseInt(merged.textThresholdLength, 10);
+
+    return {
+      enabledGlobal: merged.enabledGlobal !== false,
+      enableTextReplacement: merged.enableTextReplacement !== false,
+      enableImageReplacement: merged.enableImageReplacement !== false,
+      enablePopupSuppression: merged.enablePopupSuppression !== false,
+      enableIframeReplacement: merged.enableIframeReplacement !== false,
+      textThresholdLength: Number.isFinite(threshold) && threshold > 0 ? threshold : DEFAULT_SETTINGS.textThresholdLength,
+      apiEndpoint:
+        typeof merged.apiEndpoint === "string" && merged.apiEndpoint.trim()
+          ? merged.apiEndpoint.trim()
+          : DEFAULT_SETTINGS.apiEndpoint
+    };
+  }
+
+  function applySettings(raw) {
+    currentSettings = normalizeSettings(raw);
+    REQUEST_BLOCK_CONFIG.ENABLE_REQUEST_BLOCK = currentSettings.enabledGlobal;
+  }
+
+  function getStoredSettings() {
+    return new Promise((resolve) => {
+      chrome.storage.local.get([STORAGE_KEY], (result) => {
+        if (chrome.runtime.lastError) {
+          resolve({ ...DEFAULT_SETTINGS });
+          return;
+        }
+        resolve(normalizeSettings(result?.[STORAGE_KEY]));
+      });
+    });
+  }
+
+  function saveStoredSettings(settings) {
+    return new Promise((resolve) => {
+      chrome.storage.local.set({ [STORAGE_KEY]: settings }, () => {
+        resolve(!chrome.runtime.lastError);
+      });
+    });
+  }
 
   function syncRequestBlockRules() {
     chrome.declarativeNetRequest.getDynamicRules((currentRules) => {
@@ -57,11 +111,16 @@
     });
   }
 
-  chrome.runtime.onInstalled.addListener(() => {
+  chrome.runtime.onInstalled.addListener(async () => {
+    const settings = await getStoredSettings();
+    applySettings(settings);
+    await saveStoredSettings(settings);
     syncRequestBlockRules();
   });
 
-  chrome.runtime.onStartup.addListener(() => {
+  chrome.runtime.onStartup.addListener(async () => {
+    const settings = await getStoredSettings();
+    applySettings(settings);
     syncRequestBlockRules();
   });
 
@@ -70,7 +129,7 @@
     const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
     try {
-      const response = await fetch(API_ENDPOINT, {
+      const response = await fetch(currentSettings.apiEndpoint, {
         method: "POST",
         headers: {
           "Content-Type": "application/json"
@@ -103,6 +162,14 @@
   }
 
   chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    if (message?.type === "AD_FILTER_SETTINGS_UPDATED") {
+      applySettings(message.settings);
+      decisionCache.clear();
+      syncRequestBlockRules();
+      sendResponse({ accepted: true });
+      return;
+    }
+
     if (message?.type !== "AD_FILTER_BATCH_CHECK") {
       return;
     }
@@ -114,6 +181,26 @@
     (async () => {
       if (typeof tabId !== "number") {
         sendResponse({ accepted: false });
+        return;
+      }
+
+      if (!currentSettings.enabledGlobal || !currentSettings.enableTextReplacement) {
+        await Promise.all(
+          items.map(async (item) => {
+            const requestId = item?.requestId;
+            if (typeof requestId !== "string") return;
+            chrome.tabs.sendMessage(
+              tabId,
+              {
+                type: "AD_FILTER_CHECK_RESULT",
+                requestId,
+                ok: true
+              },
+              { frameId }
+            );
+          })
+        );
+        sendResponse({ accepted: true });
         return;
       }
 
@@ -143,4 +230,10 @@
 
     return true;
   });
+
+  (async () => {
+    const settings = await getStoredSettings();
+    applySettings(settings);
+    syncRequestBlockRules();
+  })();
 })();
