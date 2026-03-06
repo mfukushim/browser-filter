@@ -1,10 +1,69 @@
 (() => {
   "use strict";
 
+  const REQUEST_BLOCK_CONFIG = {
+    ENABLE_REQUEST_BLOCK: true
+  };
+
+  const REQUEST_BLOCK_RULE_ID_BASE = 900000;
+  const REQUEST_BLOCK_RULES = [
+    { id: REQUEST_BLOCK_RULE_ID_BASE + 1, filter: "||doubleclick.net^" },
+    { id: REQUEST_BLOCK_RULE_ID_BASE + 2, filter: "||googlesyndication.com^" },
+    { id: REQUEST_BLOCK_RULE_ID_BASE + 3, filter: "||adservice.google.com^" },
+    { id: REQUEST_BLOCK_RULE_ID_BASE + 4, filter: "||googleadservices.com^" },
+    { id: REQUEST_BLOCK_RULE_ID_BASE + 5, filter: "||adnxs.com^" },
+    { id: REQUEST_BLOCK_RULE_ID_BASE + 6, filter: "||taboola.com^" },
+    { id: REQUEST_BLOCK_RULE_ID_BASE + 7, filter: "||outbrain.com^" },
+    { id: REQUEST_BLOCK_RULE_ID_BASE + 8, filter: "||popads.net^" }
+  ].map((rule) => ({
+    id: rule.id,
+    priority: 1,
+    action: { type: "block" },
+    condition: {
+      urlFilter: rule.filter,
+      resourceTypes: [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "image",
+        "xmlhttprequest",
+        "media"
+      ]
+    }
+  }));
+
   const API_ENDPOINT = "http://localhost/ad-filter/judge";
   // const API_ENDPOINT = "https://example.com/ad-filter/judge";
   const REQUEST_TIMEOUT_MS = 8000;
   const decisionCache = new Map();
+
+  function syncRequestBlockRules() {
+    chrome.declarativeNetRequest.getDynamicRules((currentRules) => {
+      const managedRuleIds = (currentRules || [])
+        .map((rule) => rule.id)
+        .filter((id) => id >= REQUEST_BLOCK_RULE_ID_BASE && id < REQUEST_BLOCK_RULE_ID_BASE + 1000);
+
+      chrome.declarativeNetRequest.updateDynamicRules(
+        {
+          removeRuleIds: managedRuleIds,
+          addRules: REQUEST_BLOCK_CONFIG.ENABLE_REQUEST_BLOCK ? REQUEST_BLOCK_RULES : []
+        },
+        () => {
+          if (chrome.runtime.lastError) {
+            console.warn("Failed to update request-block rules:", chrome.runtime.lastError.message);
+          }
+        }
+      );
+    });
+  }
+
+  chrome.runtime.onInstalled.addListener(() => {
+    syncRequestBlockRules();
+  });
+
+  chrome.runtime.onStartup.addListener(() => {
+    syncRequestBlockRules();
+  });
 
   async function fetchDecisionFromApi(text) {
     const controller = new AbortController();

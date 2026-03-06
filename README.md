@@ -6,6 +6,10 @@
 - 判定完了まで `#` でマスク表示
 - 判定 `OK` は元テキストを復元、`NG` はマスク維持
 - 画像 (`img`) を白い空画像に差し替え
+- ポップアップ/オーバーレイ要素のDOM抑止
+- ポップアップ系セレクタへのCSS抑止
+- `window.open` による新規ポップアップ抑止
+- 広告配信ドメインへのリクエスト遮断（DNR）
 
 ## 使い方
 
@@ -18,8 +22,15 @@
 `content.js` で以下を変更できます。
 
 ```js
-const MIN_TEXT_LENGTH = 20;
-const MASK_CHAR = "#";
+const CONFIG = {
+  ENABLE_TEXT_REVIEW: true,
+  MIN_TEXT_LENGTH: 20,
+  MASK_CHAR: "#",
+  ENABLE_IMAGE_BLANKING: true,
+  ENABLE_POPUP_DOM_BLOCK: true,
+  ENABLE_POPUP_CSS_BLOCK: true,
+  ENABLE_WINDOW_OPEN_BLOCK: true
+};
 ```
 
 `background.js` で判定 API を変更できます。
@@ -29,3 +40,11 @@ const API_ENDPOINT = "https://example.com/ad-filter/judge";
 ```
 
 API は `POST` で `{ "text": "..." }` を受け取り、`{ "ok": true/false }` を返す前提です。
+
+広告配信ドメインのリクエスト遮断は `background.js` の以下で切り替えできます。
+
+```js
+const REQUEST_BLOCK_CONFIG = {
+  ENABLE_REQUEST_BLOCK: true
+};
+```

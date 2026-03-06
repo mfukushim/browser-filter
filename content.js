@@ -1,9 +1,19 @@
 (() => {
   "use strict";
 
-  const MIN_TEXT_LENGTH = 20;
-  const MASK_CHAR = "#";
-  const REVIEW_DEBOUNCE_MS = 120;
+  const CONFIG = {
+    ENABLE_TEXT_REVIEW: true,
+    MIN_TEXT_LENGTH: 20,
+    MASK_CHAR: "#",
+    REVIEW_DEBOUNCE_MS: 120,
+    ENABLE_IMAGE_BLANKING: true,
+    ENABLE_POPUP_DOM_BLOCK: true,
+    ENABLE_POPUP_CSS_BLOCK: true,
+    ENABLE_WINDOW_OPEN_BLOCK: true
+  };
+
+  const POPUP_KEYWORD_RE =
+    /(popup|pop-up|modal|overlay|interstitial|lightbox|paywall|subscribe|newsletter|consent|cookie|banner|advert|ad-|ad_|ads|dialog)/i;
 
   const SKIP_TEXT_TAGS = new Set([
     "SCRIPT",
@@ -26,21 +36,22 @@
   }
 
   function isEligibleText(text) {
-    return typeof text === "string" && text.trim().length >= MIN_TEXT_LENGTH;
+    return typeof text === "string" && text.trim().length >= CONFIG.MIN_TEXT_LENGTH;
   }
 
   function maskText(text) {
-    return Array.from(text).map(() => MASK_CHAR).join("");
+    return Array.from(text).map(() => CONFIG.MASK_CHAR).join("");
   }
 
   function queueTextNode(node) {
+    if (!CONFIG.ENABLE_TEXT_REVIEW) return;
     if (!node || node.nodeType !== Node.TEXT_NODE) return;
     if (shouldSkipTextNode(node)) return;
     pendingNodes.add(node);
   }
 
   function queueTextNodesInRoot(root) {
-    if (!root) return;
+    if (!root || !CONFIG.ENABLE_TEXT_REVIEW) return;
 
     if (root.nodeType === Node.TEXT_NODE) {
       queueTextNode(root);
@@ -56,8 +67,9 @@
   }
 
   function scheduleReviewFlush() {
+    if (!CONFIG.ENABLE_TEXT_REVIEW) return;
     if (reviewTimer !== null) return;
-    reviewTimer = window.setTimeout(flushPendingReviews, REVIEW_DEBOUNCE_MS);
+    reviewTimer = window.setTimeout(flushPendingReviews, CONFIG.REVIEW_DEBOUNCE_MS);
   }
 
   function buildRequestId() {
@@ -137,6 +149,7 @@
 
   function flushPendingReviews() {
     reviewTimer = null;
+    if (!CONFIG.ENABLE_TEXT_REVIEW) return;
     if (pendingNodes.size === 0) return;
 
     const nodes = Array.from(pendingNodes);
@@ -171,6 +184,7 @@
   }
 
   function blankImage(img) {
+    if (!CONFIG.ENABLE_IMAGE_BLANKING) return;
     if (!(img instanceof HTMLImageElement)) return;
     if (img.dataset.afBlanked === "1") return;
 
@@ -193,6 +207,7 @@
   }
 
   function blankImages(root) {
+    if (!CONFIG.ENABLE_IMAGE_BLANKING) return;
     if (!root) return;
     if (root instanceof HTMLImageElement) {
       blankImage(root);
@@ -204,14 +219,158 @@
     }
   }
 
+  function addPopupBlockCss() {
+    if (!CONFIG.ENABLE_POPUP_CSS_BLOCK) return;
+    if (document.getElementById("af-popup-style")) return;
+
+    const style = document.createElement("style");
+    style.id = "af-popup-style";
+    style.textContent = `
+      [class*="popup"], [id*="popup"],
+      [class*="modal"], [id*="modal"],
+      [class*="overlay"], [id*="overlay"],
+      [class*="interstitial"], [id*="interstitial"],
+      [class*="paywall"], [id*="paywall"],
+      [class*="subscribe"], [id*="subscribe"],
+      [class*="cookie"], [id*="cookie"],
+      [class*="consent"], [id*="consent"] {
+        display: none !important;
+        visibility: hidden !important;
+        pointer-events: none !important;
+      }
+      html[style*="overflow: hidden"], body[style*="overflow: hidden"] {
+        overflow: auto !important;
+      }
+    `;
+    (document.head || document.documentElement).appendChild(style);
+  }
+
+  function unlockScrollIfLocked() {
+    const html = document.documentElement;
+    const body = document.body;
+    if (html && html.style.overflow === "hidden") {
+      html.style.overflow = "auto";
+    }
+    if (body && body.style.overflow === "hidden") {
+      body.style.overflow = "auto";
+    }
+  }
+
+  function getElementMarker(el) {
+    const className = typeof el.className === "string" ? el.className : "";
+    return [
+      el.tagName,
+      el.id || "",
+      className,
+      el.getAttribute("role") || "",
+      el.getAttribute("aria-label") || "",
+      el.getAttribute("aria-modal") || "",
+      el.getAttribute("data-testid") || "",
+      el.getAttribute("src") || ""
+    ].join(" ");
+  }
+
+  function isLikelyPopup(el) {
+    if (!(el instanceof HTMLElement)) return false;
+
+    const marker = getElementMarker(el);
+    const byKeyword = POPUP_KEYWORD_RE.test(marker);
+    const style = window.getComputedStyle(el);
+    const rect = el.getBoundingClientRect();
+
+    const viewportWidth = Math.max(document.documentElement.clientWidth, window.innerWidth || 0);
+    const viewportHeight = Math.max(document.documentElement.clientHeight, window.innerHeight || 0);
+    const coversLargeArea =
+      rect.width >= viewportWidth * 0.4 &&
+      rect.height >= viewportHeight * 0.3;
+
+    const position = style.position;
+    const positionedOverlay = position === "fixed" || position === "sticky";
+
+    const zIndex = Number.parseInt(style.zIndex || "0", 10);
+    const highZ = Number.isFinite(zIndex) && zIndex >= 1000;
+
+    if (el.tagName === "DIALOG" && el.hasAttribute("open")) {
+      return true;
+    }
+
+    if (el.tagName === "IFRAME" && byKeyword) {
+      return true;
+    }
+
+    return byKeyword || (positionedOverlay && highZ && coversLargeArea);
+  }
+
+  function suppressPopupElement(el) {
+    if (!(el instanceof HTMLElement)) return;
+    if (el.dataset.afPopupSuppressed === "1") return;
+    if (!isLikelyPopup(el)) return;
+
+    el.dataset.afPopupSuppressed = "1";
+    el.style.setProperty("display", "none", "important");
+    el.style.setProperty("visibility", "hidden", "important");
+    el.style.setProperty("pointer-events", "none", "important");
+  }
+
+  function suppressPopupsInRoot(root) {
+    if (!CONFIG.ENABLE_POPUP_DOM_BLOCK) return;
+    if (!root) return;
+
+    if (root instanceof HTMLElement) {
+      suppressPopupElement(root);
+    }
+
+    const candidates = root.querySelectorAll
+      ? root.querySelectorAll("div,section,aside,dialog,iframe,ins")
+      : [];
+    for (const el of candidates) {
+      suppressPopupElement(el);
+    }
+
+    unlockScrollIfLocked();
+  }
+
+  function installWindowOpenBlocker() {
+    if (!CONFIG.ENABLE_WINDOW_OPEN_BLOCK) return;
+    if (!document.documentElement || document.documentElement.dataset.afWindowOpenBlocked === "1") return;
+
+    const script = document.createElement("script");
+    script.textContent = `
+      (() => {
+        if (window.__afWindowOpenBlocked === true) return;
+        window.__afWindowOpenBlocked = true;
+        const originalOpen = window.open;
+        window.open = function(url, target, features) {
+          if (target === "_self") {
+            return originalOpen.call(window, url, target, features);
+          }
+          return null;
+        };
+      })();
+    `;
+
+    (document.documentElement || document.head).appendChild(script);
+    script.remove();
+    document.documentElement.dataset.afWindowOpenBlocked = "1";
+  }
+
   function processNode(root) {
     queueTextNodesInRoot(root);
     blankImages(root);
+    suppressPopupsInRoot(root);
     scheduleReviewFlush();
   }
 
+  addPopupBlockCss();
+  installWindowOpenBlocker();
+
   if (document.body) {
     processNode(document.body);
+  }
+
+  const observedAttributes = ["src", "srcset", "sizes"];
+  if (CONFIG.ENABLE_POPUP_DOM_BLOCK) {
+    observedAttributes.push("class", "style", "hidden", "open", "id", "role", "aria-modal");
   }
 
   const observer = new MutationObserver((mutations) => {
@@ -225,11 +384,15 @@
         if (mutation.target instanceof HTMLImageElement) {
           blankImage(mutation.target);
         }
+        if (mutation.target instanceof HTMLElement) {
+          suppressPopupElement(mutation.target);
+        }
         continue;
       }
 
       if (mutation.target instanceof Element) {
         queueTextNodesInRoot(mutation.target);
+        suppressPopupsInRoot(mutation.target);
       }
 
       for (const node of mutation.addedNodes) {
@@ -249,6 +412,6 @@
     childList: true,
     characterData: true,
     attributes: true,
-    attributeFilter: ["src", "srcset", "sizes"]
+    attributeFilter: observedAttributes
   });
 })();
