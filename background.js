@@ -9,7 +9,7 @@
     enablePopupSuppression: true,
     enableIframeReplacement: true,
     textThresholdLength: 20,
-    apiEndpoint: "http://localhost/ad-filter/judge"
+    apiEndpoint: "http://192.168.11.122:11434"
   };
 
   let currentSettings = { ...DEFAULT_SETTINGS };
@@ -129,23 +129,33 @@
     const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
     try {
-      const response = await fetch(currentSettings.apiEndpoint, {
+      console.log('url:',`${currentSettings.apiEndpoint}/api/generate`)
+      const body = JSON.stringify({
+        "model": "qwen3.5:0.8b",
+        "prompt": "この文を要約してください。要約文のみ出力してください。\n'"+text+"'",
+        "stream": false,
+        "think": false
+      });
+      console.log('body:',body)
+      const response = await fetch(`${currentSettings.apiEndpoint}/api/generate`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json"
         },
-        body: JSON.stringify({ text }),
+        body: body,
         signal: controller.signal
       });
 
+      console.log('response:',JSON.stringify(response))
       if (!response.ok) {
-        return false;
+        return "";
       }
 
       const data = await response.json();
-      return data?.ok === true;
+      return typeof data?.response === "string" ? data.response : "";
+      // return typeof data?.replace === "string" ? data.replace : "";
     } catch (error) {
-      return false;
+      return "";
     } finally {
       clearTimeout(timer);
     }
@@ -156,9 +166,9 @@
       return decisionCache.get(text);
     }
 
-    const decision = await fetchDecisionFromApi(text);
-    decisionCache.set(text, decision);
-    return decision;
+    const replace = await fetchDecisionFromApi(text);
+    decisionCache.set(text, replace);
+    return replace;
   }
 
   chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
@@ -188,13 +198,14 @@
         await Promise.all(
           items.map(async (item) => {
             const requestId = item?.requestId;
+            const text = item?.text;
             if (typeof requestId !== "string") return;
             chrome.tabs.sendMessage(
               tabId,
               {
                 type: "AD_FILTER_CHECK_RESULT",
                 requestId,
-                ok: true
+                replace: typeof text === "string" ? text : ""
               },
               { frameId }
             );
@@ -212,13 +223,13 @@
             return;
           }
 
-          const ok = await getDecision(text);
+          const replace = await getDecision(text);
           chrome.tabs.sendMessage(
             tabId,
             {
               type: "AD_FILTER_CHECK_RESULT",
               requestId,
-              ok
+              replace
             },
             { frameId }
           );

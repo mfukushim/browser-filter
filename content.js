@@ -126,18 +126,19 @@
     return `${Date.now()}-${requestSequence}`;
   }
 
-  function applyDecisionToNode(node, requestId, ok) {
+  function applyDecisionToNode(node, requestId, replace) {
     const state = nodeStates.get(node);
     if (!state || state.requestId !== requestId) {
       requestToNode.delete(requestId);
       return;
     }
 
-    if (ok) {
-      if (node.isConnected && node.nodeValue === state.maskedText) {
-        node.nodeValue = state.originalText;
+    if (typeof replace === "string" && replace.length > 0) {
+      state.status = "replaced";
+      state.replacedText = replace;
+      if (node.isConnected) {
+        node.nodeValue = replace;
       }
-      nodeStates.delete(node);
       requestToNode.delete(requestId);
       return;
     }
@@ -160,12 +161,12 @@
     if (message?.type !== "AD_FILTER_CHECK_RESULT") return;
 
     const requestId = message.requestId;
-    const ok = message.ok === true;
+    const replace = typeof message.replace === "string" ? message.replace : "";
     if (typeof requestId !== "string") return;
 
     const node = requestToNode.get(requestId);
     if (node) {
-      applyDecisionToNode(node, requestId, ok);
+      applyDecisionToNode(node, requestId, replace);
     }
   });
 
@@ -186,6 +187,9 @@
       return null;
     }
     if (prev && prev.status === "rejected" && text === prev.maskedText) {
+      return null;
+    }
+    if (prev && prev.status === "replaced" && text === prev.replacedText) {
       return null;
     }
 
