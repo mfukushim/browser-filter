@@ -8,6 +8,7 @@
     enableImageReplacement: true,
     enablePopupSuppression: true,
     enableIframeReplacement: true,
+    useApiReplaceResponse: true,
     textThresholdLength: 20,
     apiEndpoint: "http://192.168.11.122:11434"
   };
@@ -58,6 +59,7 @@
       enableImageReplacement: merged.enableImageReplacement !== false,
       enablePopupSuppression: merged.enablePopupSuppression !== false,
       enableIframeReplacement: merged.enableIframeReplacement !== false,
+      useApiReplaceResponse: merged.useApiReplaceResponse !== false,
       textThresholdLength: Number.isFinite(threshold) && threshold > 0 ? threshold : DEFAULT_SETTINGS.textThresholdLength,
       apiEndpoint:
         typeof merged.apiEndpoint === "string" && merged.apiEndpoint.trim()
@@ -129,14 +131,15 @@
     const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
     try {
-      console.log('url:',`${currentSettings.apiEndpoint}/api/generate`)
+      // console.log('url:',`${currentSettings.apiEndpoint}/api/generate`)
       const body = JSON.stringify({
         "model": "qwen3.5:0.8b",
-        "prompt": "この文を要約してください。要約文のみ出力してください。\n'"+text+"'",
+        "prompt": "この文を一語で表現してください。\n'"+text+"'",
+        // "prompt": "この文を1行に要約してください。要約文のみ出力してください。\n'"+text+"'",
         "stream": false,
         "think": false
       });
-      console.log('body:',body)
+      // console.log('body:',body)
       const response = await fetch(`${currentSettings.apiEndpoint}/api/generate`, {
         method: "POST",
         headers: {
@@ -146,16 +149,23 @@
         signal: controller.signal
       });
 
-      console.log('response:',JSON.stringify(response))
       if (!response.ok) {
-        return "";
+        return { ok: false, replace: "" };
       }
+      // console.log('status:',response)
 
       const data = await response.json();
-      return typeof data?.response === "string" ? data.response : "";
-      // return typeof data?.replace === "string" ? data.replace : "";
+      // console.log('data:',JSON.stringify(data))
+      return {
+        ok: data?.ok === true,
+        replace:
+          typeof data?.response === "string"
+            ? data.response
+            : (typeof data?.replace === "string" ? data.replace : "")
+      };
     } catch (error) {
-      return "";
+      console.error("Error fetching decision from API:", error);
+      return { ok: false, replace: "" };
     } finally {
       clearTimeout(timer);
     }
@@ -166,9 +176,9 @@
       return decisionCache.get(text);
     }
 
-    const replace = await fetchDecisionFromApi(text);
-    decisionCache.set(text, replace);
-    return replace;
+    const decision = await fetchDecisionFromApi(text);
+    decisionCache.set(text, decision);
+    return decision;
   }
 
   chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
@@ -205,6 +215,7 @@
               {
                 type: "AD_FILTER_CHECK_RESULT",
                 requestId,
+                ok: true,
                 replace: typeof text === "string" ? text : ""
               },
               { frameId }
@@ -215,26 +226,25 @@
         return;
       }
 
-      await Promise.all(
-        items.map(async (item) => {
-          const requestId = item?.requestId;
-          const text = item?.text;
-          if (typeof requestId !== "string" || typeof text !== "string") {
-            return;
-          }
+      for (const item of items) {
+        const requestId = item?.requestId;
+        const text = item?.text;
+        if (typeof requestId !== "string" || typeof text !== "string") {
+          continue;
+        }
 
-          const replace = await getDecision(text);
-          chrome.tabs.sendMessage(
-            tabId,
-            {
-              type: "AD_FILTER_CHECK_RESULT",
-              requestId,
-              replace
-            },
-            { frameId }
-          );
-        })
-      );
+        const decision = await getDecision(text);
+        chrome.tabs.sendMessage(
+          tabId,
+          {
+            type: "AD_FILTER_CHECK_RESULT",
+            requestId,
+            ok: decision?.ok === true,
+            replace: typeof decision?.replace === "string" ? decision.replace : ""
+          },
+          { frameId }
+        );
+      }
 
       sendResponse({ accepted: true });
     })();

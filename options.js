@@ -8,6 +8,7 @@
     enableImageReplacement: true,
     enablePopupSuppression: true,
     enableIframeReplacement: true,
+    useApiReplaceResponse: true,
     textThresholdLength: 20,
     apiEndpoint: "http://localhost/ad-filter/judge"
   };
@@ -25,6 +26,7 @@
       enableImageReplacement: merged.enableImageReplacement !== false,
       enablePopupSuppression: merged.enablePopupSuppression !== false,
       enableIframeReplacement: merged.enableIframeReplacement !== false,
+      useApiReplaceResponse: merged.useApiReplaceResponse !== false,
       textThresholdLength: Number.isFinite(threshold) && threshold > 0 ? threshold : DEFAULT_SETTINGS.textThresholdLength,
       apiEndpoint:
         typeof merged.apiEndpoint === "string" && merged.apiEndpoint.trim()
@@ -59,6 +61,7 @@
       enableImageReplacement: document.getElementById("enableImageReplacement").checked,
       enablePopupSuppression: document.getElementById("enablePopupSuppression").checked,
       enableIframeReplacement: document.getElementById("enableIframeReplacement").checked,
+      useApiReplaceResponse: document.getElementById("useApiReplaceResponse").checked,
       textThresholdLength: threshold,
       apiEndpoint: document.getElementById("apiEndpoint").value
     });
@@ -70,6 +73,7 @@
     document.getElementById("enableImageReplacement").checked = settings.enableImageReplacement;
     document.getElementById("enablePopupSuppression").checked = settings.enablePopupSuppression;
     document.getElementById("enableIframeReplacement").checked = settings.enableIframeReplacement;
+    document.getElementById("useApiReplaceResponse").checked = settings.useApiReplaceResponse;
     document.getElementById("textThresholdLength").value = String(settings.textThresholdLength);
     document.getElementById("apiEndpoint").value = settings.apiEndpoint;
   }

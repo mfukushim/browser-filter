@@ -8,6 +8,7 @@
     enableImageReplacement: true,
     enablePopupSuppression: true,
     enableIframeReplacement: true,
+    useApiReplaceResponse: true,
     textThresholdLength: 20
   };
 
@@ -18,6 +19,7 @@
     REVIEW_DEBOUNCE_MS: 120,
     ENABLE_IMAGE_BLANKING: DEFAULT_SETTINGS.enableImageReplacement,
     ENABLE_IFRAME_BLANKING: DEFAULT_SETTINGS.enableIframeReplacement,
+    USE_API_REPLACE_RESPONSE: DEFAULT_SETTINGS.useApiReplaceResponse,
     ENABLE_POPUP_DOM_BLOCK: DEFAULT_SETTINGS.enablePopupSuppression,
     ENABLE_POPUP_CSS_BLOCK: DEFAULT_SETTINGS.enablePopupSuppression,
     ENABLE_WINDOW_OPEN_BLOCK: DEFAULT_SETTINGS.enablePopupSuppression
@@ -50,6 +52,7 @@
       enableImageReplacement: merged.enableImageReplacement !== false,
       enablePopupSuppression: merged.enablePopupSuppression !== false,
       enableIframeReplacement: merged.enableIframeReplacement !== false,
+      useApiReplaceResponse: merged.useApiReplaceResponse !== false,
       textThresholdLength: Number.isFinite(threshold) && threshold > 0 ? threshold : DEFAULT_SETTINGS.textThresholdLength
     };
   }
@@ -61,6 +64,7 @@
     CONFIG.ENABLE_TEXT_REVIEW = enabledGlobal && settings.enableTextReplacement;
     CONFIG.ENABLE_IMAGE_BLANKING = enabledGlobal && settings.enableImageReplacement;
     CONFIG.ENABLE_IFRAME_BLANKING = enabledGlobal && settings.enableIframeReplacement;
+    CONFIG.USE_API_REPLACE_RESPONSE = settings.useApiReplaceResponse;
     CONFIG.ENABLE_POPUP_DOM_BLOCK = enabledGlobal && settings.enablePopupSuppression;
     CONFIG.ENABLE_POPUP_CSS_BLOCK = enabledGlobal && settings.enablePopupSuppression;
     CONFIG.ENABLE_WINDOW_OPEN_BLOCK = enabledGlobal && settings.enablePopupSuppression;
@@ -126,18 +130,30 @@
     return `${Date.now()}-${requestSequence}`;
   }
 
-  function applyDecisionToNode(node, requestId, replace) {
+  function applyDecisionToNode(node, requestId, result) {
     const state = nodeStates.get(node);
     if (!state || state.requestId !== requestId) {
       requestToNode.delete(requestId);
       return;
     }
 
-    if (typeof replace === "string" && replace.length > 0) {
-      state.status = "replaced";
-      state.replacedText = replace;
-      if (node.isConnected) {
-        node.nodeValue = replace;
+    const replace = typeof result?.replace === "string" ? result.replace : "";
+    const ok = result?.ok === true;
+
+    if (CONFIG.USE_API_REPLACE_RESPONSE) {
+      if (replace.length > 0) {
+        state.status = "replaced";
+        state.replacedText = replace;
+        if (node.isConnected) {
+          node.nodeValue = replace;
+        }
+        requestToNode.delete(requestId);
+        return;
+      }
+    } else if (ok) {
+      state.status = "approved";
+      if (node.isConnected && node.nodeValue === state.maskedText) {
+        node.nodeValue = state.originalText;
       }
       requestToNode.delete(requestId);
       return;
@@ -161,12 +177,15 @@
     if (message?.type !== "AD_FILTER_CHECK_RESULT") return;
 
     const requestId = message.requestId;
-    const replace = typeof message.replace === "string" ? message.replace : "";
+    const result = {
+      replace: typeof message.replace === "string" ? message.replace : "",
+      ok: message.ok === true
+    };
     if (typeof requestId !== "string") return;
 
     const node = requestToNode.get(requestId);
     if (node) {
-      applyDecisionToNode(node, requestId, replace);
+      applyDecisionToNode(node, requestId, result);
     }
   });
 
@@ -190,6 +209,9 @@
       return null;
     }
     if (prev && prev.status === "replaced" && text === prev.replacedText) {
+      return null;
+    }
+    if (prev && prev.status === "approved" && text === prev.originalText) {
       return null;
     }
 
