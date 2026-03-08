@@ -132,10 +132,30 @@
 
     try {
       // console.log('url:',`${currentSettings.apiEndpoint}/api/generate`)
+/*
       const body = JSON.stringify({
-        "model": "qwen3.5:0.8b",
+        "model": "qwen3.5:4b",
         "prompt": "この文を一語で表現してください。\n'"+text+"'",
         // "prompt": "この文を1行に要約してください。要約文のみ出力してください。\n'"+text+"'",
+        "stream": false,
+        "think": false
+      });
+*/
+      const body = JSON.stringify({
+        "model": "qwen3.5:4b",
+        "prompt": "次の文は映画の話題を含みますか?\n'"+text+"'",
+        // "prompt": "この文を1行に要約してください。要約文のみ出力してください。\n'"+text+"'",
+        "system": "jsonで返答してください。例:{isTrue:false}",
+        "format": {
+          "type": "object",
+          "properties": {
+            "isTrue": {
+              "type": "boolean"
+            }
+          },
+          "required": ["isTue"],
+          "additionalProperties": false
+        },
         "stream": false,
         "think": false
       });
@@ -156,10 +176,18 @@
 
       const data = await response.json();
       // console.log('data:',JSON.stringify(data))
+      let json
+      try {
+        if(data?.response.includes("{")){
+          json = JSON.parse(data?.response)
+        }
+      } catch (error) {
+
+      }
       return {
-        ok: data?.ok === true,
+        ok: json?.isTrue === true,
         replace:
-          typeof data?.response === "string"
+        !json ? "": typeof data?.response === "string"
             ? data.response
             : (typeof data?.replace === "string" ? data.replace : "")
       };
