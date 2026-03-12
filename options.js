@@ -10,7 +10,8 @@
     enableIframeReplacement: true,
     useApiReplaceResponse: true,
     textThresholdLength: 20,
-    apiEndpoint: "http://localhost/ad-filter/judge"
+    apiEndpoint: "http://localhost/ad-filter/judge",
+    apiPrompt: "次の文は映画の話題を含みますか?"
   };
 
   const form = document.getElementById("settings-form");
@@ -31,7 +32,11 @@
       apiEndpoint:
         typeof merged.apiEndpoint === "string" && merged.apiEndpoint.trim()
           ? merged.apiEndpoint.trim()
-          : DEFAULT_SETTINGS.apiEndpoint
+          : DEFAULT_SETTINGS.apiEndpoint,
+      apiPrompt:
+        typeof merged.apiPrompt === "string" && merged.apiPrompt.trim()
+          ? merged.apiPrompt.trim()
+          : DEFAULT_SETTINGS.apiPrompt
     };
   }
 
@@ -56,19 +61,18 @@
   function readFormValues() {
     const threshold = Number.parseInt(document.getElementById("textThresholdLength").value, 10);
     return normalize({
-      enabledGlobal: document.getElementById("enabledGlobal").checked,
       enableTextReplacement: document.getElementById("enableTextReplacement").checked,
       enableImageReplacement: document.getElementById("enableImageReplacement").checked,
       enablePopupSuppression: document.getElementById("enablePopupSuppression").checked,
       enableIframeReplacement: document.getElementById("enableIframeReplacement").checked,
       useApiReplaceResponse: document.getElementById("useApiReplaceResponse").checked,
       textThresholdLength: threshold,
-      apiEndpoint: document.getElementById("apiEndpoint").value
+      apiEndpoint: document.getElementById("apiEndpoint").value,
+      apiPrompt: document.getElementById("apiPrompt").value
     });
   }
 
   function writeFormValues(settings) {
-    document.getElementById("enabledGlobal").checked = settings.enabledGlobal;
     document.getElementById("enableTextReplacement").checked = settings.enableTextReplacement;
     document.getElementById("enableImageReplacement").checked = settings.enableImageReplacement;
     document.getElementById("enablePopupSuppression").checked = settings.enablePopupSuppression;
@@ -76,6 +80,7 @@
     document.getElementById("useApiReplaceResponse").checked = settings.useApiReplaceResponse;
     document.getElementById("textThresholdLength").value = String(settings.textThresholdLength);
     document.getElementById("apiEndpoint").value = settings.apiEndpoint;
+    document.getElementById("apiPrompt").value = settings.apiPrompt;
   }
 
   function getChromeStorageSettings() {
@@ -114,7 +119,14 @@
 
   async function saveSettings(event) {
     event.preventDefault();
-    const settings = readFormValues();
+    const current = normalize(await getChromeStorageSettings());
+    const partial = readFormValues();
+    const settings = {
+      ...current,
+      ...partial,
+      enabledGlobal: current.enabledGlobal !== false
+    };
+
     setToLocalStorage(settings);
     const ok = await setChromeStorageSettings(settings);
 

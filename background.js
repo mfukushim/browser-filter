@@ -10,7 +10,8 @@
     enableIframeReplacement: true,
     useApiReplaceResponse: true,
     textThresholdLength: 20,
-    apiEndpoint: "http://192.168.11.122:11434"
+    apiEndpoint: "http://192.168.11.122:11434",
+    apiPrompt: "次の文は映画の話題を含みますか?"
   };
 
   let currentSettings = { ...DEFAULT_SETTINGS };
@@ -64,7 +65,11 @@
       apiEndpoint:
         typeof merged.apiEndpoint === "string" && merged.apiEndpoint.trim()
           ? merged.apiEndpoint.trim()
-          : DEFAULT_SETTINGS.apiEndpoint
+          : DEFAULT_SETTINGS.apiEndpoint,
+      apiPrompt:
+        typeof merged.apiPrompt === "string" && merged.apiPrompt.trim()
+          ? merged.apiPrompt.trim()
+          : DEFAULT_SETTINGS.apiPrompt
     };
   }
 
@@ -143,7 +148,7 @@
 */
       const body = JSON.stringify({
         "model": "qwen3.5:4b",
-        "prompt": "次の文は映画の話題を含みますか?\n'"+text+"'",
+        "prompt": currentSettings.apiPrompt + "\n'"+text+"'",
         // "prompt": "この文を1行に要約してください。要約文のみ出力してください。\n'"+text+"'",
         "system": "jsonで返答してください。例:{isTrue:false}",
         "format": {

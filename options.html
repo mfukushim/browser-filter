@@ -11,11 +11,6 @@
       <h1>Ad Filter 設定</h1>
       <form id="settings-form">
         <label class="row checkbox-row">
-          <input id="enabledGlobal" type="checkbox" />
-          <span>機能全体を有効化</span>
-        </label>
-
-        <label class="row checkbox-row">
           <input id="enableTextReplacement" type="checkbox" />
           <span>テキスト置き換えを有効化</span>
         </label>
@@ -48,6 +43,11 @@
         <label class="row">
           <span>API エンドポイント</span>
           <input id="apiEndpoint" type="url" />
+        </label>
+
+        <label class="row">
+          <span>API プロンプト</span>
+          <input id="apiPrompt" type="text" />
         </label>
 
         <div class="actions">
