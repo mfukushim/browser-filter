@@ -4,6 +4,7 @@
   const STORAGE_KEY = "afSettings";
   const DEFAULT_SETTINGS = {
     enabledGlobal: true,
+    enableRequestBlock: true,
     enableTextReplacement: true,
     enableImageReplacement: true,
     enablePopupSuppression: true,
@@ -25,6 +26,7 @@
 
     return {
       enabledGlobal: merged.enabledGlobal !== false,
+      enableRequestBlock: merged.enableRequestBlock !== false,
       enableTextReplacement: merged.enableTextReplacement !== false,
       enableImageReplacement: merged.enableImageReplacement !== false,
       enablePopupSuppression: merged.enablePopupSuppression !== false,
@@ -68,6 +70,7 @@
   function readFormValues() {
     const threshold = Number.parseInt(document.getElementById("textThresholdLength").value, 10);
     return normalize({
+      enableRequestBlock: document.getElementById("enableRequestBlock").checked,
       enableTextReplacement: document.getElementById("enableTextReplacement").checked,
       enableImageReplacement: document.getElementById("enableImageReplacement").checked,
       enablePopupSuppression: document.getElementById("enablePopupSuppression").checked,
@@ -82,6 +85,7 @@
   }
 
   function writeFormValues(settings) {
+    document.getElementById("enableRequestBlock").checked = settings.enableRequestBlock;
     document.getElementById("enableTextReplacement").checked = settings.enableTextReplacement;
     document.getElementById("enableImageReplacement").checked = settings.enableImageReplacement;
     document.getElementById("enablePopupSuppression").checked = settings.enablePopupSuppression;

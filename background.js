@@ -4,14 +4,15 @@
   const STORAGE_KEY = "afSettings";
   const DEFAULT_SETTINGS = {
     enabledGlobal: true,
+    enableRequestBlock: true,
     enableTextReplacement: true,
     enableImageReplacement: true,
     enablePopupSuppression: true,
     enableIframeReplacement: true,
     useApiReplaceResponse: false,
     invertOkValue: false,
-    textThresholdLength: 20,
-    apiEndpoint: "http://192.168.11.122:11434",
+    textThresholdLength: 10,
+    apiEndpoint: "http://localhost:11434",
     apiPrompt: "次の文は映画の話題を含みますか?",
     apiModel: "qwen3.5:4b"
   };
@@ -58,6 +59,7 @@
 
     return {
       enabledGlobal: merged.enabledGlobal !== false,
+      enableRequestBlock: merged.enableRequestBlock !== false,
       enableTextReplacement: merged.enableTextReplacement !== false,
       enableImageReplacement: merged.enableImageReplacement !== false,
       enablePopupSuppression: merged.enablePopupSuppression !== false,
@@ -82,7 +84,7 @@
 
   function applySettings(raw) {
     currentSettings = normalizeSettings(raw);
-    REQUEST_BLOCK_CONFIG.ENABLE_REQUEST_BLOCK = currentSettings.enabledGlobal;
+    REQUEST_BLOCK_CONFIG.ENABLE_REQUEST_BLOCK = currentSettings.enabledGlobal && currentSettings.enableRequestBlock;
   }
 
   function getStoredSettings() {

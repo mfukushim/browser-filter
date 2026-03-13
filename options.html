@@ -3,12 +3,12 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Ad Filter 設定</title>
+    <title>Browser Filter & Morpher 設定</title>
     <link rel="stylesheet" href="options.css" />
   </head>
   <body>
     <main class="container">
-      <h1>Ad Filter 設定</h1>
+      <h1>Browser Filter & Morpher 設定</h1>
       <form id="settings-form">
         <fieldset class="settings-group">
           <legend>機能設定</legend>
@@ -31,18 +31,24 @@
             <input id="enableIframeReplacement" type="checkbox" />
             <span>iframe を空白画像に置き換える</span>
           </label>
+
+          <label class="row checkbox-row">
+            <input id="enableRequestBlock" type="checkbox" />
+            <span>基本的な広告ドメインリクエストのブロックを有効化</span>
+          </label>
+
         </fieldset>
 
         <fieldset class="settings-group">
-          <legend>動作モード設定</legend>
+          <legend>テキスト置き換え動作モード設定</legend>
           <label class="row checkbox-row">
             <input id="useApiReplaceResponse" type="checkbox" />
-            <span>変換モード（OFFでフィルターモード）</span>
+            <span>変換モード/フィルターモード（OFFでフィルターモード）</span>
           </label>
 
           <label class="row checkbox-row">
             <input id="invertOkValue" type="checkbox" />
-            <span>OK判定を反転させる</span>
+            <span>フィルターモードのOK判定を反転させる</span>
           </label>
 
           <label class="row">
