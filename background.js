@@ -229,6 +229,19 @@
     return decision;
   }
 
+  let activeProcessingCount = 0;
+
+  async function updateIconState() {
+    if (activeProcessingCount > 0) {
+      // 処理中: アイコンを強調色に変更
+      await chrome.action.setBadgeText({ text: "..." });
+      await chrome.action.setBadgeBackgroundColor({ color: "#ea301e" });
+    } else {
+      // 処理完了: アイコンを通常状態に戻す
+      await chrome.action.setBadgeText({ text: "" });
+    }
+  }
+
   chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (message?.type === "AD_FILTER_SETTINGS_UPDATED") {
       applySettings(message.settings);
@@ -274,27 +287,37 @@
         return;
       }
 
-      for (const item of items) {
-        const requestId = item?.requestId;
-        const text = item?.text;
-        if (typeof requestId !== "string" || typeof text !== "string") {
-          continue;
+      // 処理開始: カウントを増やしてアイコンを更新
+      activeProcessingCount++;
+      await updateIconState();
+
+      try {
+        for (const item of items) {
+          const requestId = item?.requestId;
+          const text = item?.text;
+          if (typeof requestId !== "string" || typeof text !== "string") {
+            continue;
+          }
+
+          const decision = await getDecision(text);
+          chrome.tabs.sendMessage(
+            tabId,
+            {
+              type: "AD_FILTER_CHECK_RESULT",
+              requestId,
+              ok: decision?.ok === true,
+              replace: typeof decision?.replace === "string" ? decision.replace : ""
+            },
+            { frameId }
+          );
         }
 
-        const decision = await getDecision(text);
-        chrome.tabs.sendMessage(
-          tabId,
-          {
-            type: "AD_FILTER_CHECK_RESULT",
-            requestId,
-            ok: decision?.ok === true,
-            replace: typeof decision?.replace === "string" ? decision.replace : ""
-          },
-          { frameId }
-        );
+        sendResponse({ accepted: true });
+      } finally {
+        // 処理完了: カウントを減らしてアイコンを更新
+        activeProcessingCount--;
+        await updateIconState();
       }
-
-      sendResponse({ accepted: true });
     })();
 
     return true;
