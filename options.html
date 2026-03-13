@@ -10,45 +10,64 @@
     <main class="container">
       <h1>Ad Filter 設定</h1>
       <form id="settings-form">
-        <label class="row checkbox-row">
-          <input id="enableTextReplacement" type="checkbox" />
-          <span>テキスト置き換えを有効化</span>
-        </label>
+        <fieldset class="settings-group">
+          <legend>機能設定</legend>
+          <label class="row checkbox-row">
+            <input id="enableTextReplacement" type="checkbox" />
+            <span>テキスト置き換えを有効化</span>
+          </label>
 
-        <label class="row checkbox-row">
-          <input id="enableImageReplacement" type="checkbox" />
-          <span>画像置き換えを有効化</span>
-        </label>
+          <label class="row checkbox-row">
+            <input id="enableImageReplacement" type="checkbox" />
+            <span>画像置き換えを有効化</span>
+          </label>
 
-        <label class="row checkbox-row">
-          <input id="enablePopupSuppression" type="checkbox" />
-          <span>ポップアップ抑制を有効化</span>
-        </label>
+          <label class="row checkbox-row">
+            <input id="enablePopupSuppression" type="checkbox" />
+            <span>ポップアップ抑制を有効化</span>
+          </label>
 
-        <label class="row checkbox-row">
-          <input id="enableIframeReplacement" type="checkbox" />
-          <span>iframe を空白画像に置き換える</span>
-        </label>
+          <label class="row checkbox-row">
+            <input id="enableIframeReplacement" type="checkbox" />
+            <span>iframe を空白画像に置き換える</span>
+          </label>
+        </fieldset>
 
-        <label class="row checkbox-row">
-          <input id="useApiReplaceResponse" type="checkbox" />
-          <span>APIのresponseで置き換える（OFFでok判定モード）</span>
-        </label>
+        <fieldset class="settings-group">
+          <legend>動作モード設定</legend>
+          <label class="row checkbox-row">
+            <input id="useApiReplaceResponse" type="checkbox" />
+            <span>変換モード（OFFでフィルターモード）</span>
+          </label>
 
-        <label class="row">
-          <span>テキスト置き換え閾値長さ</span>
-          <input id="textThresholdLength" type="number" min="1" step="1" />
-        </label>
+          <label class="row checkbox-row">
+            <input id="invertOkValue" type="checkbox" />
+            <span>OK判定を反転させる</span>
+          </label>
 
-        <label class="row">
-          <span>API エンドポイント</span>
-          <input id="apiEndpoint" type="url" />
-        </label>
+          <label class="row">
+            <span>API プロンプト</span>
+            <input id="apiPrompt" type="text" placeholder="例: 次の文は映画の話題を含みますか?, 次の文の語尾を「ニャー」に変えてください。" />
+          </label>
 
-        <label class="row">
-          <span>API プロンプト</span>
-          <input id="apiPrompt" type="text" />
-        </label>
+          <label class="row">
+            <span>テキスト置き換え閾値長さ</span>
+            <input id="textThresholdLength" type="number" min="1" step="1" placeholder="15" />
+          </label>
+        </fieldset>
+
+        <fieldset class="settings-group">
+          <legend>API設定</legend>
+          <label class="row">
+            <span>API エンドポイント</span>
+            <input id="apiEndpoint" type="url" placeholder="http://localhost:11434" />
+          </label>
+
+          <label class="row">
+            <span>モデル名</span>
+            <input id="apiModel" type="text" placeholder="qwen3.5:4b" />
+          </label>
+        </fieldset>
 
         <div class="actions">
           <button type="submit">保存</button>

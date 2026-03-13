@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "Ad Filter Replacer",
+  "name": "mi Browser Filter & Morpher",
   "version": "1.0.0",
   "description": "ページ内文字列の置換と画像の空白化を行う拡張",
   "background": {

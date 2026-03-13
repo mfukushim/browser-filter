@@ -8,10 +8,12 @@
     enableImageReplacement: true,
     enablePopupSuppression: true,
     enableIframeReplacement: true,
-    useApiReplaceResponse: true,
+    useApiReplaceResponse: false,
+    invertOkValue: false,
     textThresholdLength: 20,
     apiEndpoint: "http://192.168.11.122:11434",
-    apiPrompt: "次の文は映画の話題を含みますか?"
+    apiPrompt: "次の文は映画の話題を含みますか?",
+    apiModel: "qwen3.5:4b"
   };
 
   let currentSettings = { ...DEFAULT_SETTINGS };
@@ -61,6 +63,7 @@
       enablePopupSuppression: merged.enablePopupSuppression !== false,
       enableIframeReplacement: merged.enableIframeReplacement !== false,
       useApiReplaceResponse: merged.useApiReplaceResponse !== false,
+      invertOkValue: merged.invertOkValue === true,
       textThresholdLength: Number.isFinite(threshold) && threshold > 0 ? threshold : DEFAULT_SETTINGS.textThresholdLength,
       apiEndpoint:
         typeof merged.apiEndpoint === "string" && merged.apiEndpoint.trim()
@@ -69,7 +72,11 @@
       apiPrompt:
         typeof merged.apiPrompt === "string" && merged.apiPrompt.trim()
           ? merged.apiPrompt.trim()
-          : DEFAULT_SETTINGS.apiPrompt
+          : DEFAULT_SETTINGS.apiPrompt,
+      apiModel:
+        typeof merged.apiModel === "string" && merged.apiModel.trim()
+          ? merged.apiModel.trim()
+          : DEFAULT_SETTINGS.apiModel
     };
   }
 
@@ -141,30 +148,42 @@
       const body = JSON.stringify({
         "model": "qwen3.5:4b",
         "prompt": "この文を一語で表現してください。\n'"+text+"'",
-        // "prompt": "この文を1行に要約してください。要約文のみ出力してください。\n'"+text+"'",
+        // "prompt": "この文を1行に要約してください。要約文のみ出力してください。\n'"+text+"'",次の文の語尾を「ニャー」に変えてください。次の文は映画の話題を含みますか。
         "stream": false,
         "think": false
       });
 */
-      const body = JSON.stringify({
-        "model": "qwen3.5:4b",
-        "prompt": currentSettings.apiPrompt + "\n'"+text+"'",
-        // "prompt": "この文を1行に要約してください。要約文のみ出力してください。\n'"+text+"'",
-        "system": "jsonで返答してください。例:{isTrue:false}",
-        "format": {
-          "type": "object",
-          "properties": {
-            "isTrue": {
-              "type": "boolean"
-            }
+      let body;
+      if (currentSettings.useApiReplaceResponse) {
+        // 変換モード: テキストを変換して返す
+        body = JSON.stringify({
+          "model": currentSettings.apiModel,
+          "prompt": currentSettings.apiPrompt + "\n'"+text+"'",
+          "system": "変換した文のみを返答してください。",
+          "stream": false,
+          "think": false
+        });
+      } else {
+        // フィルターモード: JSON形式でisTrue判定を返す
+        body = JSON.stringify({
+          "model": currentSettings.apiModel,
+          "prompt": currentSettings.apiPrompt + "\n'"+text+"'",
+          "system": "jsonで返答してください。例:{isTrue:false}",
+          "format": {
+            "type": "object",
+            "properties": {
+              "isTrue": {
+                "type": "boolean"
+              }
+            },
+            "required": ["isTue"],
+            "additionalProperties": false
           },
-          "required": ["isTue"],
-          "additionalProperties": false
-        },
-        "stream": false,
-        "think": false
-      });
-      // console.log('body:',body)
+          "stream": false,
+          "think": false
+        });
+      }
+      //console.log('body:',body)
       const response = await fetch(`${currentSettings.apiEndpoint}/api/generate`, {
         method: "POST",
         headers: {
@@ -177,8 +196,6 @@
       if (!response.ok) {
         return { ok: false, replace: "" };
       }
-      // console.log('status:',response)
-
       const data = await response.json();
       // console.log('data:',JSON.stringify(data))
       let json
@@ -189,12 +206,10 @@
       } catch (error) {
 
       }
+      const isOk = json?.isTrue === true;
       return {
-        ok: json?.isTrue === true,
-        replace:
-        !json ? "": typeof data?.response === "string"
-            ? data.response
-            : (typeof data?.replace === "string" ? data.replace : "")
+        ok: currentSettings.invertOkValue ? !isOk : isOk,
+        replace: json ? '': data.response
       };
     } catch (error) {
       console.error("Error fetching decision from API:", error);

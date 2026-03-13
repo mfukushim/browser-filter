@@ -25,7 +25,23 @@ h1 {
 
 #settings-form {
   display: grid;
-  gap: 14px;
+  gap: 20px;
+}
+
+.settings-group {
+  border: 2px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 16px;
+  margin: 0;
+  display: grid;
+  gap: 12px;
+}
+
+.settings-group legend {
+  font-weight: 700;
+  font-size: 16px;
+  color: #1e40af;
+  padding: 0 8px;
 }
 
 .row {
@@ -40,11 +56,34 @@ h1 {
 }
 
 input[type="number"],
-input[type="url"] {
+input[type="url"],
+input[type="text"] {
   width: 100%;
   padding: 10px 12px;
   border: 1px solid #cbd5e1;
   border-radius: 8px;
+  font-size: 14px;
+}
+
+input[type="number"]:focus,
+input[type="url"]:focus,
+input[type="text"]:focus {
+  outline: none;
+  border-color: #1d4ed8;
+  box-shadow: 0 0 0 3px rgba(29, 78, 216, 0.1);
+}
+
+input[type="checkbox"]:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.checkbox-row:has(input:disabled) {
+  opacity: 0.6;
+}
+
+.checkbox-row:has(input:disabled) span {
+  color: #9ca3af;
 }
 
 .actions {

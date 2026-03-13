@@ -8,10 +8,12 @@
     enableImageReplacement: true,
     enablePopupSuppression: true,
     enableIframeReplacement: true,
-    useApiReplaceResponse: true,
+    useApiReplaceResponse: false,
+    invertOkValue: false,
     textThresholdLength: 20,
     apiEndpoint: "http://localhost/ad-filter/judge",
-    apiPrompt: "次の文は映画の話題を含みますか?"
+    apiPrompt: "次の文は映画の話題を含みますか?",
+    apiModel: "qwen3.5:4b"
   };
 
   const form = document.getElementById("settings-form");
@@ -28,6 +30,7 @@
       enablePopupSuppression: merged.enablePopupSuppression !== false,
       enableIframeReplacement: merged.enableIframeReplacement !== false,
       useApiReplaceResponse: merged.useApiReplaceResponse !== false,
+      invertOkValue: merged.invertOkValue === true,
       textThresholdLength: Number.isFinite(threshold) && threshold > 0 ? threshold : DEFAULT_SETTINGS.textThresholdLength,
       apiEndpoint:
         typeof merged.apiEndpoint === "string" && merged.apiEndpoint.trim()
@@ -36,7 +39,11 @@
       apiPrompt:
         typeof merged.apiPrompt === "string" && merged.apiPrompt.trim()
           ? merged.apiPrompt.trim()
-          : DEFAULT_SETTINGS.apiPrompt
+          : DEFAULT_SETTINGS.apiPrompt,
+      apiModel:
+        typeof merged.apiModel === "string" && merged.apiModel.trim()
+          ? merged.apiModel.trim()
+          : DEFAULT_SETTINGS.apiModel
     };
   }
 
@@ -66,9 +73,11 @@
       enablePopupSuppression: document.getElementById("enablePopupSuppression").checked,
       enableIframeReplacement: document.getElementById("enableIframeReplacement").checked,
       useApiReplaceResponse: document.getElementById("useApiReplaceResponse").checked,
+      invertOkValue: document.getElementById("invertOkValue").checked,
       textThresholdLength: threshold,
       apiEndpoint: document.getElementById("apiEndpoint").value,
-      apiPrompt: document.getElementById("apiPrompt").value
+      apiPrompt: document.getElementById("apiPrompt").value,
+      apiModel: document.getElementById("apiModel").value
     });
   }
 
@@ -78,9 +87,11 @@
     document.getElementById("enablePopupSuppression").checked = settings.enablePopupSuppression;
     document.getElementById("enableIframeReplacement").checked = settings.enableIframeReplacement;
     document.getElementById("useApiReplaceResponse").checked = settings.useApiReplaceResponse;
+    document.getElementById("invertOkValue").checked = settings.invertOkValue;
     document.getElementById("textThresholdLength").value = String(settings.textThresholdLength);
     document.getElementById("apiEndpoint").value = settings.apiEndpoint;
     document.getElementById("apiPrompt").value = settings.apiPrompt;
+    document.getElementById("apiModel").value = settings.apiModel;
   }
 
   function getChromeStorageSettings() {
@@ -138,6 +149,25 @@
     setStatus(ok ? "保存しました。" : "localStorage には保存しましたが拡張ストレージへの保存に失敗しました。", !ok);
   }
 
+  function updateInvertOkValueState() {
+    const useApiReplaceResponse = document.getElementById("useApiReplaceResponse").checked;
+    const invertOkValueCheckbox = document.getElementById("invertOkValue");
+
+    // 変換モード（useApiReplaceResponse）がONの場合、OK判定反転を無効化
+    invertOkValueCheckbox.disabled = useApiReplaceResponse;
+
+    // 無効化されたときはチェックを外す
+    if (useApiReplaceResponse) {
+      invertOkValueCheckbox.checked = false;
+    }
+  }
+
+  // 変換モードチェックボックスの変更イベントをリッスン
+  document.getElementById("useApiReplaceResponse").addEventListener("change", updateInvertOkValueState);
+
   form.addEventListener("submit", saveSettings);
-  loadSettings();
+  loadSettings().then(() => {
+    // 初期ロード時にも状態を更新
+    updateInvertOkValueState();
+  });
 })();

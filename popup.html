@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Ad Filter</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <main class="panel">
+      <h1>Ad Filter</h1>
+      <label class="toggle-row" for="enabledGlobal">
+        <span>機能全体を有効化</span>
+        <input id="enabledGlobal" type="checkbox" />
+      </label>
+      <p id="status" aria-live="polite"></p>
+      <button id="openOptions" type="button">詳細設定</button>
+    </main>
+    <script src="popup.js"></script>
+  </body>
+</html>
