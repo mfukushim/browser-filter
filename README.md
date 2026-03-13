@@ -1,4 +1,4 @@
-# mi Browser Filter & Morpher Chrome 拡張
+# Browser Filter & Morpher Chrome 拡張
 
 このChrome拡張はLLMによるWebページのフィルタリングと変換機能を提供します。
 
