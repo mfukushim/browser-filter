@@ -49,3 +49,20 @@ button {
 button:hover {
   background: #1e40af;
 }
+
+button:disabled {
+  background: #94a3b8;
+  cursor: not-allowed;
+}
+
+#interruptProcessing {
+  background: #dc2626;
+}
+
+#interruptProcessing:hover {
+  background: #b91c1c;
+}
+
+#interruptProcessing:disabled {
+  background: #fca5a5;
+}

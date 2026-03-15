@@ -145,16 +145,6 @@
     const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
     try {
-      // console.log('url:',`${currentSettings.apiEndpoint}/api/generate`)
-/*
-      const body = JSON.stringify({
-        "model": "qwen3.5:4b",
-        "prompt": "この文を一語で表現してください。\n'"+text+"'",
-        // "prompt": "この文を1行に要約してください。要約文のみ出力してください。\n'"+text+"'",次の文の語尾を「ニャー」に変えてください。次の文は映画の話題を含みますか。
-        "stream": false,
-        "think": false
-      });
-*/
       let body;
       if (currentSettings.useApiReplaceResponse) {
         // 変換モード: テキストを変換して返す
@@ -232,6 +222,7 @@
   }
 
   let activeProcessingCount = 0;
+  let interruptSignalVersion = 0;
 
   async function updateIconState() {
     if (activeProcessingCount > 0) {
@@ -249,6 +240,17 @@
       applySettings(message.settings);
       decisionCache.clear();
       syncRequestBlockRules();
+      sendResponse({ accepted: true });
+      return;
+    }
+
+    if (message?.type === "AD_FILTER_GET_PROCESSING_STATE") {
+      sendResponse({ accepted: true, isProcessing: activeProcessingCount > 0 });
+      return;
+    }
+
+    if (message?.type === "AD_FILTER_INTERRUPT_REQUESTED") {
+      interruptSignalVersion++;
       sendResponse({ accepted: true });
       return;
     }
@@ -294,7 +296,12 @@
       await updateIconState();
 
       try {
+        const processingSignalVersion = interruptSignalVersion;
         for (const item of items) {
+          if (interruptSignalVersion !== processingSignalVersion) {
+            break;
+          }
+
           const requestId = item?.requestId;
           const text = item?.text;
           if (typeof requestId !== "string" || typeof text !== "string") {
@@ -302,7 +309,10 @@
           }
 
           const decision = await getDecision(text);
-          chrome.tabs.sendMessage(
+          if (interruptSignalVersion !== processingSignalVersion) {
+            break;
+          }
+          const sent = chrome.tabs.sendMessage(
             tabId,
             {
               type: "AD_FILTER_CHECK_RESULT",
@@ -312,6 +322,11 @@
             },
             { frameId }
           );
+
+          // 送信先が不在（タブの状態変化など）の場合はループを抜ける
+          if (!sent) {
+            break;
+          }
         }
 
         sendResponse({ accepted: true });
